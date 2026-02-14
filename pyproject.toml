@@ -1,0 +1,10 @@
+[project]
+name = "shareusbot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "ncatbot>=4.4.1.post1",
+    "python-socks>=2.8.0",
+]
