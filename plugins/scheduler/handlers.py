@@ -23,7 +23,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             return
         for gid in groups:
             try:
-                await bot.api.post_group_msg(group_id=gid, text=text)
+                await bot.api.post_group_msg(group_id = gid, text = text)
             except Exception:
                 LOGGER.exception("send scheduler message failed: group_id=%s", gid)
 
@@ -31,10 +31,10 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         await _notify_groups(ctx.settings.group_admin, text)
 
     async def _search_hits(keyword: str) -> list[dict]:
-        hits = await ctx.meilisearch_service().search(keyword, limit=5)
+        hits = await ctx.meilisearch_service().search(keyword, limit = 5)
         if hits:
             return hits
-        rows = await ctx.archive_service().search_by_name(keyword, limit=5)
+        rows = await ctx.archive_service().search_by_name(keyword, limit = 5)
         return [
             {
                 "name": row.name,
@@ -78,8 +78,8 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
 
     async def daily_report_job() -> None:
         now = datetime.now()
-        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start + timedelta(days=1)
+        start = (now - timedelta(days = 1)).replace(hour = 0, minute = 0, second = 0, microsecond = 0)
+        end = start + timedelta(days = 1)
 
         archived_count = await ctx.archive_service().count_between(start, end)
         query_count = await ctx.query_log_service().count_between(start, end)
@@ -95,9 +95,9 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
 
     async def monthly_report_job() -> None:
         now = datetime.now()
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = now.replace(day = 1, hour = 0, minute = 0, second = 0, microsecond = 0)
         archived_count = await ctx.archive_service().count_between(month_start, now)
-        top = await ctx.archive_service().top_senders_between(month_start, now, limit=5)
+        top = await ctx.archive_service().top_senders_between(month_start, now, limit = 5)
 
         lines = [
             "【月度报告】",
@@ -108,15 +108,15 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         if not top:
             lines.append("暂无数据")
         else:
-            for idx, (sender_id, cnt) in enumerate(top, start=1):
+            for idx, (sender_id, cnt) in enumerate(top, start = 1):
                 lines.append(f"{idx}. {sender_id} - {cnt}份")
         await _notify_admin_groups("\n".join(lines))
 
     async def weekly_report_job() -> None:
         now = datetime.now()
-        start = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = (now - timedelta(days = 7)).replace(hour = 0, minute = 0, second = 0, microsecond = 0)
         archived_count = await ctx.archive_service().count_between(start, now)
-        top = await ctx.archive_service().top_senders_between(start, now, limit=5)
+        top = await ctx.archive_service().top_senders_between(start, now, limit = 5)
 
         lines = [
             "【周报】",
@@ -127,7 +127,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         if not top:
             lines.append("暂无数据")
         else:
-            for idx, (sender_id, cnt) in enumerate(top, start=1):
+            for idx, (sender_id, cnt) in enumerate(top, start = 1):
                 if archived_count > 0:
                     ratio = (cnt / archived_count) * 100
                     lines.append(f"{idx}. {sender_id} - {cnt}份 ({ratio:.2f}%)")
@@ -136,7 +136,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         await _notify_admin_groups("\n".join(lines))
 
     async def query_polling_job() -> None:
-        rows = await ctx.query_log_service().list_unfinished(limit=300)
+        rows = await ctx.query_log_service().list_unfinished(limit = 300)
         finished = 0
         closed = 0
         now = datetime.now()
@@ -164,8 +164,8 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             await _notify_admin_groups(f"【求文轮询】完成匹配：{finished}，超时关闭：{closed}")
 
     async def query_feedback_job() -> None:
-        before = datetime.now() - timedelta(days=3)
-        rows = await ctx.query_log_service().list_unfinished_older_than(before, limit=30)
+        before = datetime.now() - timedelta(days = 3)
+        rows = await ctx.query_log_service().list_unfinished_older_than(before, limit = 30)
         if not rows:
             return
         lines = ["【未完成求文反馈（超3天）】"]
@@ -177,12 +177,12 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
 
     async def hot_query_rank_job() -> None:
         now = datetime.now()
-        start = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
-        rank = await ctx.query_log_service().top_extract_between(start, now, limit=10)
+        start = (now - timedelta(days = 7)).replace(hour = 0, minute = 0, second = 0, microsecond = 0)
+        rank = await ctx.query_log_service().top_extract_between(start, now, limit = 10)
         if not rank:
             return
         lines = ["【热门求文排行（近7天）】"]
-        for idx, (name, cnt) in enumerate(rank, start=1):
+        for idx, (name, cnt) in enumerate(rank, start = 1):
             lines.append(f"{idx}. {name} - {cnt}次")
         await _notify_admin_groups("\n".join(lines))
 
@@ -313,14 +313,14 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
 
         report = export_invalid_members_excel(
             invalid_rows,
-            output_dir=ctx.settings.scheduler_report_output_dir,
-            title="资源群失效人员名单",
+            output_dir = ctx.settings.scheduler_report_output_dir,
+            title = "资源群失效人员名单",
         )
 
         await _notify_admin_groups(f"【失效人员清理】发现 {len(invalid_rows)} 人，已生成名单：{report.name}")
         for gid in ctx.settings.group_admin:
             try:
-                await bot.api.send_group_file(gid, str(report), name=report.name)
+                await bot.api.send_group_file(gid, str(report), name = report.name)
             except Exception:
                 LOGGER.exception("send invalid member excel failed: group_id=%s", gid)
 
@@ -330,87 +330,87 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         if ctx.settings.scheduler_daily_report_enabled:
             scheduler.add_job(
                 daily_report_job,
-                CronTrigger(hour=12, minute=0),
-                id="daily_report",
-                replace_existing=True,
+                CronTrigger(hour = 12, minute = 0),
+                id = "daily_report",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_weekly_report_enabled:
             scheduler.add_job(
                 weekly_report_job,
-                CronTrigger(day_of_week="sun", hour=22, minute=0),
-                id="weekly_report",
-                replace_existing=True,
+                CronTrigger(day_of_week = "sun", hour = 22, minute = 0),
+                id = "weekly_report",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_monthly_report_enabled:
             scheduler.add_job(
                 monthly_report_job,
-                CronTrigger(day=15, hour=8, minute=0),
-                id="monthly_report",
-                replace_existing=True,
+                CronTrigger(day = 15, hour = 8, minute = 0),
+                id = "monthly_report",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_query_polling_enabled:
             scheduler.add_job(
                 query_polling_job,
-                CronTrigger(hour=18, minute=0),
-                id="query_polling",
-                replace_existing=True,
+                CronTrigger(hour = 18, minute = 0),
+                id = "query_polling",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_query_feedback_enabled:
             scheduler.add_job(
                 query_feedback_job,
-                CronTrigger(hour=18, minute=5),
-                id="query_feedback",
-                replace_existing=True,
+                CronTrigger(hour = 18, minute = 5),
+                id = "query_feedback",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_hot_query_rank_enabled:
             scheduler.add_job(
                 hot_query_rank_job,
-                CronTrigger(day_of_week="mon", hour=9, minute=0),
-                id="hot_query_rank",
-                replace_existing=True,
+                CronTrigger(day_of_week = "mon", hour = 9, minute = 0),
+                id = "hot_query_rank",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_reset_password_enabled:
             scheduler.add_job(
                 reset_password_job,
-                CronTrigger(hour=17, minute=0),
-                id="reset_password",
-                replace_existing=True,
+                CronTrigger(hour = 17, minute = 0),
+                id = "reset_password",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_nonsense_enabled:
             for hour in ctx.settings.nonsense_send_hours:
                 scheduler.add_job(
                     send_nonsense_job,
-                    CronTrigger(hour=hour, minute=0),
-                    id=f"nonsense_{hour}",
-                    replace_existing=True,
+                    CronTrigger(hour = hour, minute = 0),
+                    id = f"nonsense_{hour}",
+                    replace_existing = True,
                 )
         if ctx.settings.scheduler_refresh_qq_info_enabled:
             scheduler.add_job(
                 refresh_qq_info_job,
-                CronTrigger(hour=0, minute=0),
-                id="refresh_qq_info",
-                replace_existing=True,
+                CronTrigger(hour = 0, minute = 0),
+                id = "refresh_qq_info",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_blacklist_check_enabled:
             scheduler.add_job(
                 blacklist_check_job,
-                CronTrigger(hour=19, minute=0),
-                id="blacklist_check",
-                replace_existing=True,
+                CronTrigger(hour = 19, minute = 0),
+                id = "blacklist_check",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_clear_invalid_notice_enabled:
             scheduler.add_job(
                 clear_invalid_notice_job,
-                CronTrigger(day=10, hour=12, minute=5),
-                id="clear_invalid_notice",
-                replace_existing=True,
+                CronTrigger(day = 10, hour = 12, minute = 5),
+                id = "clear_invalid_notice",
+                replace_existing = True,
             )
         if ctx.settings.scheduler_clear_invalid_enabled:
             scheduler.add_job(
                 clear_invalid_job,
-                CronTrigger(day=10, hour=21, minute=0),
-                id="clear_invalid",
-                replace_existing=True,
+                CronTrigger(day = 10, hour = 21, minute = 0),
+                id = "clear_invalid",
+                replace_existing = True,
             )
 
     @bot.on_startup()
@@ -429,11 +429,11 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             tz = None
             LOGGER.warning("invalid scheduler timezone: %s", ctx.settings.scheduler_timezone)
 
-        scheduler = AsyncIOScheduler(timezone=tz)
+        scheduler = AsyncIOScheduler(timezone = tz)
         _register_jobs()
         scheduler.start()
         LOGGER.info("scheduler started, jobs=%s", len(scheduler.get_jobs()))
-        await _notify_admin_groups("定时任务调度器已启动。")
+        # await _notify_admin_groups("定时任务调度器已启动。")
 
     @bot.on_shutdown()
     async def on_scheduler_shutdown(event: MetaEvent) -> None:
@@ -441,7 +441,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         if scheduler is None:
             return
         try:
-            scheduler.shutdown(wait=False)
+            scheduler.shutdown(wait = False)
             LOGGER.info("scheduler stopped")
         finally:
             scheduler = None

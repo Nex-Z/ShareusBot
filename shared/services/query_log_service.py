@@ -27,12 +27,12 @@ class QueryLogService:
         item = QueryLog(
             content=content,
             extract=extract,
-            sender_id=str(sender_id),
+            sender_id=int(sender_id),
             sender_name=sender_name or "",
             send_time=send_time,
             status=0 if has_result else 1,
             result=json.dumps(result_rows, ensure_ascii=False) if has_result else "",
-            answer_id="0" if has_result else "",
+            answer_id=0,
             finish_time=datetime.now() if has_result else None,
         )
         async with self._session_factory() as session:
@@ -61,7 +61,7 @@ class QueryLogService:
                     continue
                 row.status = 0
                 row.finish_time = now
-                row.answer_id = "0"
+                row.answer_id = 0
                 row.result = json.dumps(
                     [{"name": archive_name, "archive_url": archive_url}],
                     ensure_ascii=False,
@@ -120,7 +120,7 @@ class QueryLogService:
                 return False
             row.status = 0
             row.finish_time = datetime.now()
-            row.answer_id = "0"
+            row.answer_id = 0
             row.result = json.dumps(result_rows, ensure_ascii=False)
             await session.commit()
             return True

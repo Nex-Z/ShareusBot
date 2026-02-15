@@ -20,7 +20,13 @@ class QMemberService:
         if not records:
             return 0, 0
 
-        qq_values = sorted({str(item[0]).strip() for item in records if str(item[0]).strip()})
+        qq_values = sorted(
+            {
+                int(str(item[0]).strip())
+                for item in records
+                if str(item[0]).strip().isdigit()
+            }
+        )
         if not qq_values:
             return 0, 0
 
@@ -33,15 +39,16 @@ class QMemberService:
             created = 0
             for qq, nick_name, avatar_url in records:
                 key = str(qq).strip()
-                if not key:
+                if not key or not key.isdigit():
                     continue
+                key_int = int(key)
                 nick = (nick_name or "").strip()
                 avatar = (avatar_url or "").strip()
-                row = exists_map.get(key)
+                row = exists_map.get(str(key_int))
                 if row is None:
-                    row = QMember(qq=key, nick_name=nick, avatar_url=avatar)
+                    row = QMember(qq=key_int, nick_name=nick, avatar_url=avatar)
                     session.add(row)
-                    exists_map[key] = row
+                    exists_map[str(key_int)] = row
                     created += 1
                     continue
                 changed = False
@@ -56,4 +63,3 @@ class QMemberService:
 
             await session.commit()
             return updated, created
-

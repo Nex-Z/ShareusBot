@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -33,9 +34,9 @@ def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
         return [
             {
                 "name": row.name,
-                "archive_url": row.archive_url,
-                "sender_id": row.sender_id,
-                "archive_date": row.archive_date.isoformat(),
+                "archiveUrl": row.archive_url,
+                "senderId": row.sender_id,
+                "archiveDate": row.archive_date.isoformat(),
                 "enabled": row.enabled,
             }
             for row in rows
@@ -93,15 +94,30 @@ def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
 
         await rate_limiter.increment_daily(user_id)
 
-        lines = ["小度为你找到了以下内容："]
-        for idx, item in enumerate(hits, start = 1):
-            name = str(item.get("name", "未知资源"))
-            url = str(item.get("archive_url", ""))
-            short_url = await ctx.short_url_service().shorten(url) if url else ""
-            lines.append(f"{idx}. 名称：{name}")
-            lines.append(f"下载地址：{short_url or url or '暂无'}")
+        lines = await generate_lines(ctx, hits)
 
         await event.reply(
             "\n".join(lines),
             at = True,
         )
+
+
+async def generate_lines(ctx, hits):
+    lines = ["小度找到了以下内容："]
+
+    async def process_item(idx, item):
+        name = str(item.get("name", "未知资源"))
+        url = str(item.get("archiveUrl") or item.get("archive_url") or "")
+        short_url = await ctx.short_url_service().shorten(url) if url else ""
+        return f"{idx}. {name}", f"({short_url or url or '暂无'})"
+
+    # 并发创建任务
+    tasks = [process_item(idx, item) for idx, item in enumerate(hits, start = 1)]
+    results = await asyncio.gather(*tasks)
+
+    # 整理结果
+    for name_line, url_line in results:
+        lines.append(name_line)
+        lines.append(url_line)
+
+    return lines

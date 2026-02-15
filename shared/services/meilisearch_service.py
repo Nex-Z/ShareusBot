@@ -41,7 +41,7 @@ class MeiliSearchService:
                 query,
                 {
                     "limit": limit,
-                    "sort": ["archive_date:desc"],
+                    "sort": ["archiveDate:desc"],
                     "attributesToSearchOn": ["name"],
                     "filter": "enabled = 0",
                 },
@@ -61,20 +61,20 @@ class MeiliSearchService:
         doc = {
             "id": item.id,
             "name": item.name,
-            "archive_url": item.archive_url,
-            "archive_date": item.archive_date.isoformat(),
-            "sender_id": item.sender_id,
-            "group_id": item.group_id,
-            "file_size": item.file_size,
-            "file_type": item.file_type,
+            "senderId": item.sender_id,
+            "size": item.size,
+            "md5": item.md5,
             "enabled": item.enabled,
+            "delFlag": item.del_flag,
+            "originUrl": item.origin_url,
+            "archiveUrl": item.archive_url,
+            "archiveDate": item.archive_date.isoformat(),
         }
 
         def _run() -> None:
-            self._index().add_documents([doc], primary_key="id")
+            self._index().add_documents([doc], primary_key = "id")
 
         try:
             await asyncio.to_thread(_run)
         except Exception:
             LOGGER.exception("MeiliSearch index failed for archive_id=%s", item.id)
-

@@ -12,13 +12,20 @@ class BlackListService:
 
     async def get_by_qq(self, qq_id: str) -> BlackList | None:
         async with self._session_factory() as session:
-            stmt = select(BlackList).where(BlackList.qq_id == str(qq_id)).limit(1)
+            stmt = (
+                select(BlackList)
+                .where(
+                    BlackList.qq_id == str(qq_id),
+                    BlackList.del_flag == 0,
+                )
+                .limit(1)
+            )
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
     async def list_all(self) -> list[BlackList]:
         async with self._session_factory() as session:
-            stmt = select(BlackList)
+            stmt = select(BlackList).where(BlackList.del_flag == 0)
             rows = (await session.execute(stmt)).scalars().all()
             return list(rows)
 
@@ -31,7 +38,14 @@ class BlackListService:
         create_by_id: str,
     ) -> BlackList | None:
         async with self._session_factory() as session:
-            exists_stmt = select(BlackList).where(BlackList.qq_id == str(qq_id)).limit(1)
+            exists_stmt = (
+                select(BlackList)
+                .where(
+                    BlackList.qq_id == str(qq_id),
+                    BlackList.del_flag == 0,
+                )
+                .limit(1)
+            )
             exists = (await session.execute(exists_stmt)).scalar_one_or_none()
             if exists is not None:
                 return None
@@ -40,6 +54,7 @@ class BlackListService:
                 qq_id=str(qq_id),
                 nick_name=nick_name or "",
                 remark=remark or "",
+                del_flag=0,
                 create_by=create_by or "",
                 create_by_id=str(create_by_id),
             )

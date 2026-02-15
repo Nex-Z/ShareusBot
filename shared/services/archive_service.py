@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import uuid
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -14,7 +15,14 @@ class ArchiveService:
 
     async def get_by_md5(self, md5: str) -> ArchivedFile | None:
         async with self._session_factory() as session:
-            stmt = select(ArchivedFile).where(ArchivedFile.md5 == md5).limit(1)
+            stmt = (
+                select(ArchivedFile)
+                .where(
+                    ArchivedFile.md5 == md5,
+                    ArchivedFile.del_flag == 0,
+                )
+                .limit(1)
+            )
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
@@ -24,6 +32,7 @@ class ArchiveService:
                 select(ArchivedFile)
                 .where(
                     ArchivedFile.enabled == 0,
+                    ArchivedFile.del_flag == 0,
                     ArchivedFile.name.like(f"%{keyword}%"),
                 )
                 .order_by(desc(ArchivedFile.archive_date))
@@ -53,6 +62,7 @@ class ArchiveService:
                 .where(
                     ArchivedFile.archive_date >= start,
                     ArchivedFile.archive_date < end,
+                    ArchivedFile.del_flag == 0,
                 )
                 .group_by(ArchivedFile.sender_id)
                 .order_by(desc("cnt"))
@@ -65,7 +75,10 @@ class ArchiveService:
         async with self._session_factory() as session:
             stmt = (
                 select(ArchivedFile.sender_id)
-                .where(ArchivedFile.sender_id != "")
+                .where(
+                    ArchivedFile.sender_id.is_not(None),
+                    ArchivedFile.del_flag == 0,
+                )
                 .group_by(ArchivedFile.sender_id)
             )
             rows = (await session.execute(stmt)).all()
@@ -76,25 +89,23 @@ class ArchiveService:
         file_name: str,
         archive_url: str,
         sender_id: str,
-        group_id: str,
-        file_size: int,
-        file_type: str,
+        size: int,
         md5: str = "",
         origin_url: str = "",
         enabled: int = 0,
     ) -> ArchivedFile:
         async with self._session_factory() as session:
             item = ArchivedFile(
+                id=uuid.uuid4().hex,
                 name=file_name,
+                sender_id=int(sender_id),
+                size=size,
+                md5=md5,
+                enabled=int(enabled),
+                del_flag=0,
+                origin_url=origin_url,
                 archive_url=archive_url,
                 archive_date=datetime.now(),
-                sender_id=str(sender_id),
-                group_id=str(group_id),
-                file_size=file_size,
-                file_type=file_type,
-                md5=md5,
-                origin_url=origin_url,
-                enabled=enabled,
             )
             session.add(item)
             await session.commit()

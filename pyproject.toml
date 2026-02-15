@@ -5,6 +5,19 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "aiomysql>=0.3.2",
+    "apscheduler>=3.11.1",
+    "boto3>=1.40.28",
+    "httpx>=0.28.1",
+    "meilisearch>=0.37.0",
     "ncatbot>=4.4.1.post1",
+    "openpyxl>=3.1.5",
+    "pypdf>=6.1.1",
     "python-socks>=2.8.0",
+    "python-dotenv>=1.1.1",
+    "reportlab>=4.4.4",
+    "redis>=6.4.0",
+    "sqlalchemy>=2.0.43",
+    "greenlet>=3.3.1",
+    "asyncio>=4.0.0",
 ]
