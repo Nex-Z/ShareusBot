@@ -1,0 +1,16 @@
+.git
+.gitignore
+.idea
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+.env
+config.yaml
+
+logs
+data
+.DS_Store
