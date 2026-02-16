@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 import string
 from typing import Any
@@ -7,6 +8,8 @@ from typing import Any
 import httpx
 
 from shared.config import Settings
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AlistService:
@@ -89,6 +92,41 @@ class AlistService:
             )
             response.raise_for_status()
 
+    def _default_refresh_path(self) -> str:
+        prefix = self._settings.alist_r2_path_prefix.strip("/")
+        if not prefix:
+            return "/"
+        return f"/{prefix}"
+
+    async def refresh_fs_list(self, path: str | None = None) -> None:
+        if not self.enabled:
+            raise RuntimeError("Alist is not configured.")
+
+        refresh_path = (path or "").strip() or self._default_refresh_path()
+        url = self._build_url(self._settings.alist_fs_list_endpoint)
+        token = await self._login()
+        async with httpx.AsyncClient(timeout=12) as client:
+            response = await client.post(
+                url,
+                json={
+                    "path": refresh_path,
+                    "password": "",
+                    "page": 1,
+                    "per_page": 10,
+                    "refresh": True,
+                },
+                headers={"authorization": token},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            code = payload.get("code")
+            if code is not None:
+                code_text = str(code).strip()
+                if code_text not in {"0", "200"}:
+                    message = payload.get("message") or payload.get("msg") or "unknown error"
+                    raise RuntimeError(f"Alist fs list refresh failed: code={code_text}, message={message}")
+        LOGGER.info("alist fs list refreshed: path=%s", refresh_path)
+
     async def reset_meta_password(self, password: str | None = None) -> str:
         if not self.enabled:
             raise RuntimeError("Alist is not configured.")
@@ -99,4 +137,3 @@ class AlistService:
         meta["password"] = final_password
         await self._update_meta(token, meta)
         return final_password
-

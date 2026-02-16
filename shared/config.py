@@ -116,6 +116,8 @@ class Settings:
     ban_word_mute_seconds: int
 
     alist_base_url: str
+    alist_r2_path_prefix: str
+    alist_fs_list_endpoint: str
     alist_username: str
     alist_password: str
     alist_login_endpoint: str
@@ -214,7 +216,7 @@ def get_settings() -> Settings:
         r2_secret_key = os.getenv("R2_SECRET_KEY", ""),
         r2_bucket = os.getenv("R2_BUCKET", ""),
         r2_public_url = os.getenv("R2_PUBLIC_URL", ""),
-        r2_path_prefix = os.getenv("R2_PATH_PREFIX", "r2"),
+        r2_path_prefix = os.getenv("R2_PATH_PREFIX", ""),
         short_url_endpoint = os.getenv("SHORT_URL_ENDPOINT", ""),
         short_url_token = os.getenv("SHORT_URL_TOKEN", ""),
         short_url_bearer = _to_bool("SHORT_URL_BEARER", True),
@@ -226,6 +228,8 @@ def get_settings() -> Settings:
         ban_word_group_aliases = _to_list("BAN_WORD_GROUPS") or ["res"],
         ban_word_mute_seconds = int(os.getenv("BAN_WORD_MUTE_SECONDS", "600")),
         alist_base_url = os.getenv("ALIST_BASE_URL", "").rstrip("/"),
+        alist_r2_path_prefix = os.getenv("ALIST_R2_PATH_PREFIX", "r2"),
+        alist_fs_list_endpoint = os.getenv("ALIST_FS_LIST_ENDPOINT", "/api/fs/list"),
         alist_username = os.getenv("ALIST_USERNAME", ""),
         alist_password = os.getenv("ALIST_PASSWORD", ""),
         alist_login_endpoint = os.getenv("ALIST_LOGIN_ENDPOINT", "/api/auth/login"),

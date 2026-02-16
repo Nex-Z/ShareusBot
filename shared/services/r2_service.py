@@ -46,7 +46,14 @@ class R2Service:
         base = (self._settings.alist_base_url or "").strip().rstrip("/")
         if not base:
             base = "https://pan.shareus.top"
-        return f"{base}/{key.lstrip('/')}"
+        path_key = key.lstrip("/")
+        archive_prefix = self._settings.alist_r2_path_prefix.strip("/")
+        if archive_prefix and not (
+            path_key == archive_prefix
+            or path_key.startswith(f"{archive_prefix}/")
+        ):
+            path_key = f"{archive_prefix}/{path_key}"
+        return f"{base}/{path_key}"
 
     async def upload(self, local_path: str, object_name: str | None = None) -> tuple[str, str]:
         if not self.enabled:
@@ -74,7 +81,17 @@ class R2Service:
             return ""
         if value.startswith("http://") or value.startswith("https://"):
             parsed = urlparse(value)
-            return parsed.path.lstrip("/")
+            path = parsed.path.lstrip("/")
+            archive_prefix = self._settings.alist_r2_path_prefix.strip("/")
+            object_prefix = self._settings.r2_path_prefix.strip("/")
+            # 归档 URL 前缀与对象存储前缀解耦时，需要先剥离 URL 层的前缀再还原对象 key。
+            if (
+                archive_prefix
+                and archive_prefix != object_prefix
+                and (path == archive_prefix or path.startswith(f"{archive_prefix}/"))
+            ):
+                path = path[len(archive_prefix):].lstrip("/")
+            return path
         return value.lstrip("/")
 
     async def delete(self, key_or_url: str) -> None:
