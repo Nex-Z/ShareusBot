@@ -26,6 +26,23 @@ class ArchiveService:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
+    async def get_by_md5_candidates(self, md5_values: list[str]) -> ArchivedFile | None:
+        values = [str(v).strip() for v in md5_values if str(v).strip()]
+        if not values:
+            return None
+
+        async with self._session_factory() as session:
+            stmt = (
+                select(ArchivedFile)
+                .where(
+                    ArchivedFile.md5.in_(values),
+                    ArchivedFile.del_flag == 0,
+                )
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
     async def search_by_name(self, keyword: str, limit: int = 10) -> list[ArchivedFile]:
         async with self._session_factory() as session:
             stmt = (

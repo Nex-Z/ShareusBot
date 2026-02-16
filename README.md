@@ -29,3 +29,14 @@
 3. 查看运行状态或日志：
    - `bash scripts/docker-deploy.sh status`
    - `bash scripts/docker-deploy.sh logs`
+
+### SSH 远程部署（本地构建镜像）
+
+- 脚本：`/Users/zhaojl/Development/Projects/ShareusBot/scripts/ssh-deploy.sh`
+- 示例：
+  - `bash scripts/ssh-deploy.sh --host 1.2.3.4 --user root --remote-dir /opt/shareusbot --image-tag 20260216`
+- 支持自动识别远端架构并按 `linux/amd64` / `linux/arm64` 构建（可用 `--platform` 显式指定）
+- 脚本会复用 SSH 连接，密码认证场景下通常只需输入一次密码
+- 默认使用 `--transfer-mode scp` 传镜像（有进度显示）；也可改成 `--transfer-mode stream`
+- 可选：如果本地镜像已构建，跳过构建
+  - `bash scripts/ssh-deploy.sh --host 1.2.3.4 --user root --no-build`

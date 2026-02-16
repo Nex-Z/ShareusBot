@@ -42,12 +42,20 @@ class R2Service:
             return f"{prefix}/{date_path}/{file_name}"
         return f"{date_path}/{file_name}"
 
-    async def upload(self, local_path: str) -> tuple[str, str]:
+    def _build_archive_url(self, key: str) -> str:
+        base = (self._settings.alist_base_url or "").strip().rstrip("/")
+        if not base:
+            base = "https://pan.shareus.top"
+        return f"{base}/{key.lstrip('/')}"
+
+    async def upload(self, local_path: str, object_name: str | None = None) -> tuple[str, str]:
         if not self.enabled:
             raise RuntimeError("R2 is not configured.")
 
         target = Path(local_path)
-        key = self._build_key(target.name)
+        raw_name = (object_name or target.name or "").strip()
+        target_name = Path(raw_name).name if raw_name else target.name
+        key = self._build_key(target_name)
 
         def _run() -> None:
             self._client.upload_file(  # type: ignore[union-attr]
@@ -58,10 +66,7 @@ class R2Service:
 
         await asyncio.to_thread(_run)
 
-        public_base = self._settings.r2_public_url.strip().rstrip("/")
-        if public_base:
-            return key, f"{public_base}/{key}"
-        return key, key
+        return key, self._build_archive_url(key)
 
     def _normalize_key(self, key_or_url: str) -> str:
         value = (key_or_url or "").strip()

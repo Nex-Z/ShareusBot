@@ -8,7 +8,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - TZ=${SCHEDULER_TIMEZONE:-Asia/Shanghai}
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      - ./config.yaml:/app/config.yaml
       - ./data:/app/data
       - ./logs:/app/logs

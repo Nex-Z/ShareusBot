@@ -17,6 +17,7 @@ class MeiliSearchService:
         self._enabled = bool(settings.meilisearch_host)
         self._index_name = settings.meilisearch_index
         self._client: meilisearch.Client | None = None
+        self._disabled_reason = ""
         if self._enabled:
             self._client = meilisearch.Client(
                 settings.meilisearch_host,
@@ -50,7 +51,14 @@ class MeiliSearchService:
 
         try:
             return await asyncio.to_thread(_run)
-        except Exception:
+        except Exception as e:
+            # API key 无效时直接降级，避免每次查询都抛 403 栈
+            if "invalid_api_key" in str(e):
+                if self._enabled:
+                    self._enabled = False
+                    self._disabled_reason = "invalid_api_key"
+                    LOGGER.error("MeiliSearch disabled due to invalid_api_key; fallback to DB search.")
+                return []
             LOGGER.exception("MeiliSearch query failed: %s", query)
             return []
 

@@ -23,14 +23,30 @@ def _extract_text(event: GroupMessageEvent) -> str:
 
 def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
     rate_limiter = QueryRateLimiter(ctx.settings)
+    exempt_user_ids: set[str] = set(ctx.settings.admins)
 
-    async def _search_archived_files(keyword: str) -> list[dict]:
+    async def _is_rate_limit_exempt(user_id: str) -> bool:
+        if user_id in exempt_user_ids:
+            return True
+
+        for admin_group_id in ctx.settings.group_admin:
+            try:
+                await bot.api.get_group_member_info(admin_group_id, user_id)
+                exempt_user_ids.add(user_id)
+                return True
+            except Exception:
+                continue
+        return False
+
+    async def _search_archived_files(keyword: str, fallback_book_name: str) -> list[dict]:
         hits = await ctx.meilisearch_service().search(keyword, limit = 10)
         if hits:
             return hits
 
         # Meili 不可用或无结果时回退 DB，避免核心链路中断
         rows = await ctx.archive_service().search_by_name(keyword, limit = 10)
+        if not rows and fallback_book_name and fallback_book_name != keyword:
+            rows = await ctx.archive_service().search_by_name(fallback_book_name, limit = 10)
         return [
             {
                 "name": row.name,
@@ -63,12 +79,21 @@ def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
                     await event.ban(7 * 24 * 3600)
                 except Exception:
                     LOGGER.debug("ban invalid template sender failed: user_id=%s", event.user_id)
-            await event.reply("求文规范错误！详情见群公告。", at = True)
+            LOGGER.info(
+                "invalid query template: group_id=%s user_id=%s raw=%s",
+                event.group_id,
+                event.user_id,
+                text,
+            )
             return
 
         user_id = str(event.user_id)
-        if user_id not in ctx.settings.admins and await rate_limiter.exceeds_daily_limit(user_id):
-            await event.reply("你今天的求文次数已达上限，请明天再试。", at = True)
+        if not await _is_rate_limit_exempt(user_id) and await rate_limiter.exceeds_daily_limit(user_id):
+            LOGGER.info(
+                "query daily limit exceeded: group_id=%s user_id=%s",
+                event.group_id,
+                user_id,
+            )
             try:
                 await event.ban(24 * 3600)
             except Exception:
@@ -76,7 +101,7 @@ def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
             return
 
         keyword = f"{book_name} {author}".strip()
-        hits = await _search_archived_files(keyword)
+        hits = await _search_archived_files(keyword, fallback_book_name = book_name)
         sender_name = (getattr(event.sender, "card", "") or event.sender.nickname or "").strip()
 
         await ctx.query_log_service().record_query(
@@ -89,7 +114,8 @@ def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
         )
 
         if not hits:
-            # await event.reply(f"没查到关于《{book_name}》的库存信息。", at=True)
+            # await event.reply(f"没查到关于《{book_name}》的库存信息。", at = True)
+            LOGGER.debug(f"没查到关于《{book_name}》的库存信息。")
             return
 
         await rate_limiter.increment_daily(user_id)
@@ -108,7 +134,12 @@ async def generate_lines(ctx, hits):
     async def process_item(idx, item):
         name = str(item.get("name", "未知资源"))
         url = str(item.get("archiveUrl") or item.get("archive_url") or "")
-        short_url = await ctx.short_url_service().shorten(url) if url else ""
+        short_url = ""
+        if url:
+            try:
+                short_url = await asyncio.wait_for(ctx.short_url_service().shorten(url), timeout = 3)
+            except Exception:
+                short_url = ""
         return f"{idx}. {name}", f"({short_url or url or '暂无'})"
 
     # 并发创建任务

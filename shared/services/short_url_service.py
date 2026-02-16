@@ -13,7 +13,8 @@ LOGGER = logging.getLogger(__name__)
 class ShortUrlService:
     def __init__(self, settings: Settings) -> None:
         self._endpoint = settings.short_url_endpoint.strip()
-        self._token = settings.short_url_token.strip()
+        self._token = settings.short_url_token.strip().strip("'\"")
+        self._use_bearer = settings.short_url_bearer
 
     @property
     def enabled(self) -> bool:
@@ -23,8 +24,13 @@ class ShortUrlService:
         if not self.enabled:
             return long_url
 
+        token_lower = self._token.lower()
+        if token_lower.startswith("bearer ") or token_lower.startswith("token "):
+            auth_value = self._token
+        else:
+            auth_value = f"Bearer {self._token}" if self._use_bearer else self._token
         headers = {
-            "authorization": f"{self._token}",
+            "authorization": auth_value,
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
@@ -49,7 +55,7 @@ class ShortUrlService:
                 data = response.json()
                 # 兼容两个常见字段
                 short_url = data.get('short') or data.get("shortLink") or data.get("short_url") or data.get("url")
-                return short_url
+                return short_url or long_url
         except Exception:
             LOGGER.exception("short url request failed")
-            return ''
+            return long_url

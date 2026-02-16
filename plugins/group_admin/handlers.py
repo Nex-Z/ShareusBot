@@ -66,13 +66,16 @@ def register_group_admin_handlers(bot: BotClient, ctx: AppContext) -> None:
 
         if text.startswith("/resetAlistPwd"):
             if not ctx.alist_service().enabled:
-                await event.reply("Alist 配置不完整，无法重置密码。", at=False)
+                LOGGER.warning(
+                    "reset alist password skipped: config incomplete, group_id=%s user_id=%s",
+                    event.group_id,
+                    event.user_id,
+                )
                 return
             try:
                 password = await ctx.alist_service().reset_meta_password()
             except Exception:
                 LOGGER.exception("reset alist password failed")
-                await event.reply("重置云盘密码失败，请检查 Alist 配置和网络。", at=False)
                 return
 
             msg = f"资源云盘密码已重置为：{password}"

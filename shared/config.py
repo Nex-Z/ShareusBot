@@ -104,6 +104,7 @@ class Settings:
 
     short_url_endpoint: str
     short_url_token: str
+    short_url_bearer: bool
 
     query_daily_limit: int
     query_daily_key_prefix: str
@@ -216,6 +217,7 @@ def get_settings() -> Settings:
         r2_path_prefix = os.getenv("R2_PATH_PREFIX", "r2"),
         short_url_endpoint = os.getenv("SHORT_URL_ENDPOINT", ""),
         short_url_token = os.getenv("SHORT_URL_TOKEN", ""),
+        short_url_bearer = _to_bool("SHORT_URL_BEARER", True),
         query_daily_limit = int(os.getenv("QUERY_DAILY_LIMIT", "5")),
         query_daily_key_prefix = os.getenv("QUERY_DAILY_KEY_PREFIX", "qiuwen:"),
         query_error_key_prefix = os.getenv("QUERY_ERROR_KEY_PREFIX", "qiuwen:warning:"),

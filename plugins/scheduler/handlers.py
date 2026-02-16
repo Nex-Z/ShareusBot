@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,6 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
     scheduler: AsyncIOScheduler | None = None
+    scheduler_tz = dt_timezone(timedelta(hours = 8))
 
     async def _notify_groups(groups: list[str], text: str) -> None:
         if not groups:
@@ -161,7 +163,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
                     closed += 1
 
         if finished or closed:
-            await _notify_admin_groups(f"【求文轮询】完成匹配：{finished}，超时关闭：{closed}")
+            LOGGER.info("query polling summary: finished=%s closed=%s", finished, closed)
 
     async def query_feedback_job() -> None:
         before = datetime.now() - timedelta(days = 3)
@@ -210,7 +212,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         if not content:
             return
 
-        text = f"【随机内容】\n{content}"
+        text = f"{content}"
         await _notify_groups(ctx.settings.group_chat, text)
 
     async def refresh_qq_info_job() -> None:
@@ -236,7 +238,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
 
         updated, created = await ctx.q_member_service().upsert_many(merged)
         if updated or created:
-            await _notify_admin_groups(f"【QQ信息刷新】更新：{updated}，新增：{created}")
+            LOGGER.info("qq info refreshed: updated=%s created=%s", updated, created)
 
     async def blacklist_check_job() -> None:
         black_list = await ctx.blacklist_service().list_all()
@@ -265,7 +267,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         await _notify_admin_groups("\n".join(lines))
 
     async def clear_invalid_notice_job() -> None:
-        await _notify_admin_groups("晚上九点将会发送本期资源群失效人员名单，请提前完成聊天群清理。")
+        LOGGER.info("clear invalid notice: scheduled reminder at 21:00")
 
     async def clear_invalid_job() -> None:
         admin_members, _ = await _get_group_members(ctx.settings.group_admin)
@@ -273,7 +275,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         chat_members, _ = await _get_group_members(ctx.settings.group_chat)
 
         if not res_members or not chat_members:
-            await _notify_admin_groups("【失效人员清理】资源群或聊天群成员读取失败，任务跳过。")
+            LOGGER.warning("clear invalid skipped: failed to load res/chat members")
             return
 
         admin_ids = {m["user_id"] for m in admin_members}
@@ -308,7 +310,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
                 )
 
         if not invalid_rows:
-            await _notify_admin_groups("【失效人员清理】本期未发现失效成员。")
+            LOGGER.info("clear invalid finished: no invalid members")
             return
 
         report = export_invalid_members_excel(
@@ -327,52 +329,55 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
     def _register_jobs() -> None:
         if scheduler is None:
             return
+        def _cron(**kwargs) -> CronTrigger:
+            return CronTrigger(timezone = scheduler_tz, **kwargs)
+
         if ctx.settings.scheduler_daily_report_enabled:
             scheduler.add_job(
                 daily_report_job,
-                CronTrigger(hour = 12, minute = 0),
+                _cron(hour = 12, minute = 0),
                 id = "daily_report",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_weekly_report_enabled:
             scheduler.add_job(
                 weekly_report_job,
-                CronTrigger(day_of_week = "sun", hour = 22, minute = 0),
+                _cron(day_of_week = "sun", hour = 22, minute = 0),
                 id = "weekly_report",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_monthly_report_enabled:
             scheduler.add_job(
                 monthly_report_job,
-                CronTrigger(day = 15, hour = 8, minute = 0),
+                _cron(day = 15, hour = 8, minute = 0),
                 id = "monthly_report",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_query_polling_enabled:
             scheduler.add_job(
                 query_polling_job,
-                CronTrigger(hour = 18, minute = 0),
+                _cron(hour = 18, minute = 0),
                 id = "query_polling",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_query_feedback_enabled:
             scheduler.add_job(
                 query_feedback_job,
-                CronTrigger(hour = 18, minute = 5),
+                _cron(hour = 18, minute = 5),
                 id = "query_feedback",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_hot_query_rank_enabled:
             scheduler.add_job(
                 hot_query_rank_job,
-                CronTrigger(day_of_week = "mon", hour = 9, minute = 0),
+                _cron(day_of_week = "mon", hour = 9, minute = 0),
                 id = "hot_query_rank",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_reset_password_enabled:
             scheduler.add_job(
                 reset_password_job,
-                CronTrigger(hour = 17, minute = 0),
+                _cron(hour = 17, minute = 0),
                 id = "reset_password",
                 replace_existing = True,
             )
@@ -380,42 +385,42 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             for hour in ctx.settings.nonsense_send_hours:
                 scheduler.add_job(
                     send_nonsense_job,
-                    CronTrigger(hour = hour, minute = 0),
+                    _cron(hour = hour, minute = 0),
                     id = f"nonsense_{hour}",
                     replace_existing = True,
                 )
         if ctx.settings.scheduler_refresh_qq_info_enabled:
             scheduler.add_job(
                 refresh_qq_info_job,
-                CronTrigger(hour = 0, minute = 0),
+                _cron(hour = 0, minute = 0),
                 id = "refresh_qq_info",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_blacklist_check_enabled:
             scheduler.add_job(
                 blacklist_check_job,
-                CronTrigger(hour = 19, minute = 0),
+                _cron(hour = 19, minute = 0),
                 id = "blacklist_check",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_clear_invalid_notice_enabled:
             scheduler.add_job(
                 clear_invalid_notice_job,
-                CronTrigger(day = 10, hour = 12, minute = 5),
+                _cron(day = 10, hour = 12, minute = 5),
                 id = "clear_invalid_notice",
                 replace_existing = True,
             )
         if ctx.settings.scheduler_clear_invalid_enabled:
             scheduler.add_job(
                 clear_invalid_job,
-                CronTrigger(day = 10, hour = 21, minute = 0),
+                _cron(day = 10, hour = 21, minute = 0),
                 id = "clear_invalid",
                 replace_existing = True,
             )
 
     @bot.on_startup()
     async def on_scheduler_startup(event: MetaEvent) -> None:
-        nonlocal scheduler
+        nonlocal scheduler, scheduler_tz
         if not ctx.settings.scheduler_enabled:
             LOGGER.info("scheduler disabled by config")
             return
@@ -424,15 +429,20 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             return
 
         try:
-            tz = ZoneInfo(ctx.settings.scheduler_timezone)
+            scheduler_tz = ZoneInfo(ctx.settings.scheduler_timezone)
         except Exception:
-            tz = None
-            LOGGER.warning("invalid scheduler timezone: %s", ctx.settings.scheduler_timezone)
+            scheduler_tz = dt_timezone(timedelta(hours = 8))
+            LOGGER.warning(
+                "invalid scheduler timezone: %s, fallback to UTC+08:00",
+                ctx.settings.scheduler_timezone,
+            )
 
-        scheduler = AsyncIOScheduler(timezone = tz)
+        scheduler = AsyncIOScheduler(timezone = scheduler_tz)
         _register_jobs()
         scheduler.start()
         LOGGER.info("scheduler started, jobs=%s", len(scheduler.get_jobs()))
+        for job in scheduler.get_jobs():
+            LOGGER.info("scheduler job: id=%s next_run=%s trigger=%s", job.id, job.next_run_time, job.trigger)
         # await _notify_admin_groups("定时任务调度器已启动。")
 
     @bot.on_shutdown()
