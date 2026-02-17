@@ -196,10 +196,10 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             password = await ctx.alist_service().reset_meta_password()
         except Exception:
             LOGGER.exception("scheduled reset alist password failed")
-            await _notify_admin_groups("【定时任务】重置云盘密码失败，请检查 Alist 配置与网络。")
+            await _notify_admin_groups("重置云盘密码失败，请检查 Alist 配置与网络。")
             return
 
-        msg = f"【定时任务】资源云盘密码已重置为：{password}"
+        msg = f"资源云盘密码已重置为：{password}"
         await _notify_groups(ctx.settings.group_res, msg)
         await _notify_admin_groups(msg)
 
@@ -329,6 +329,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
     def _register_jobs() -> None:
         if scheduler is None:
             return
+
         def _cron(**kwargs) -> CronTrigger:
             return CronTrigger(timezone = scheduler_tz, **kwargs)
 
