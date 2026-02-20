@@ -29,6 +29,19 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             except Exception:
                 LOGGER.exception("send scheduler message failed: group_id=%s", gid)
 
+    async def _notify_groups_and_set_essence(groups: list[str], text: str) -> None:
+        """发送消息到群并设置为群精华"""
+        if not groups:
+            return
+        for gid in groups:
+            try:
+                msg_id = await bot.api.post_group_msg(group_id = gid, text = text)
+                if msg_id:
+                    await bot.api.set_essence_msg(message_id = msg_id)
+                    LOGGER.info("set essence msg: group_id=%s, msg_id=%s", gid, msg_id)
+            except Exception:
+                LOGGER.exception("send+essence message failed: group_id=%s", gid)
+
     async def _notify_admin_groups(text: str) -> None:
         await _notify_groups(ctx.settings.group_admin, text)
 
@@ -200,7 +213,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             return
 
         msg = f"资源云盘密码已重置为：{password}"
-        await _notify_groups(ctx.settings.group_res, msg)
+        await _notify_groups_and_set_essence(ctx.settings.group_res, msg)
         await _notify_admin_groups(msg)
 
     async def send_nonsense_job() -> None:
