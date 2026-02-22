@@ -261,7 +261,6 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
 
         msg = f"资源云盘密码已重置为：{password}"
         await _notify_groups_and_set_essence(ctx.settings.group_res, msg)
-        await _notify_admin_groups(msg)
 
     async def send_nonsense_job() -> None:
         if not ctx.settings.group_chat:
