@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -20,6 +22,32 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
     scheduler: AsyncIOScheduler | None = None
     scheduler_tz = dt_timezone(timedelta(hours = 8))
 
+    def _normalize_message_id(raw: Any) -> int | str | None:
+        """兼容不同 SDK/版本返回值，提取可用于 set_essence_msg 的 message_id。"""
+        if raw is None:
+            return None
+        if isinstance(raw, int):
+            return raw
+        if isinstance(raw, str):
+            value = raw.strip()
+            if not value or value.lower() == "none":
+                return None
+            if value.isdigit():
+                try:
+                    return int(value)
+                except Exception:
+                    return value
+            return value
+        if isinstance(raw, dict):
+            for key in ("message_id", "msg_id", "id"):
+                if key in raw:
+                    return _normalize_message_id(raw.get(key))
+            return None
+        msg_id = getattr(raw, "message_id", None)
+        if msg_id is not None:
+            return _normalize_message_id(msg_id)
+        return None
+
     async def _notify_groups(groups: list[str], text: str) -> None:
         if not groups:
             return
@@ -35,12 +63,31 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             return
         for gid in groups:
             try:
-                msg_id = await bot.api.post_group_msg(group_id = gid, text = text)
-                if msg_id:
+                raw_msg_id = await bot.api.post_group_msg(group_id = gid, text = text)
+            except Exception:
+                LOGGER.exception("send scheduler message failed before set_essence: group_id=%s", gid)
+                continue
+
+            msg_id = _normalize_message_id(raw_msg_id)
+            if msg_id is None:
+                LOGGER.warning(
+                    "set essence skipped: invalid message_id, group_id=%s raw=%r",
+                    gid,
+                    raw_msg_id,
+                )
+                continue
+
+            # NapCat 在极短时间窗口内可能还未完成消息索引，做短重试提升稳定性。
+            for attempt in range(1, 4):
+                try:
                     await bot.api.set_essence_msg(message_id = msg_id)
                     LOGGER.info("set essence msg: group_id=%s, msg_id=%s", gid, msg_id)
-            except Exception:
-                LOGGER.exception("send+essence message failed: group_id=%s", gid)
+                    break
+                except Exception:
+                    if attempt >= 3:
+                        LOGGER.exception("set essence msg failed: group_id=%s, msg_id=%s", gid, msg_id)
+                        break
+                    await asyncio.sleep(1)
 
     async def _notify_admin_groups(text: str) -> None:
         await _notify_groups(ctx.settings.group_admin, text)
