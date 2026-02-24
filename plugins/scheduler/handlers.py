@@ -22,27 +22,28 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
     scheduler: AsyncIOScheduler | None = None
     scheduler_tz = dt_timezone(timedelta(hours = 8))
 
-    def _normalize_message_id(raw: Any) -> int | str | None:
+    def _normalize_message_id(raw: Any) -> str | None:
         """兼容不同 SDK/版本返回值，提取可用于 set_essence_msg 的 message_id。"""
         if raw is None:
             return None
         if isinstance(raw, int):
-            return raw
+            return str(raw)
         if isinstance(raw, str):
             value = raw.strip()
             if not value or value.lower() == "none":
                 return None
-            if value.isdigit():
-                try:
-                    return int(value)
-                except Exception:
-                    return value
             return value
         if isinstance(raw, dict):
             for key in ("message_id", "msg_id", "id"):
                 if key in raw:
                     return _normalize_message_id(raw.get(key))
+            nested = raw.get("data")
+            if nested is not None:
+                return _normalize_message_id(nested)
             return None
+        data = getattr(raw, "data", None)
+        if data is not None:
+            return _normalize_message_id(data)
         msg_id = getattr(raw, "message_id", None)
         if msg_id is not None:
             return _normalize_message_id(msg_id)
@@ -61,6 +62,39 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         """发送消息到群并设置为群精华"""
         if not groups:
             return
+
+        async def _set_essence_with_retry(group_id: str, message_id: str) -> bool:
+            # NapCat 需要整数 message_id；字符串型 ID 有时会被拒绝
+            try:
+                essence_msg_id: Any = int(message_id)
+            except (ValueError, TypeError):
+                essence_msg_id = message_id
+
+            # NapCat 发送后需要短暂时间完成消息索引，立即调用会概率性失败
+            # 首次调用前先等待 1.5s，失败时再按退避策略重试
+            await asyncio.sleep(1.5)
+            retry_delays = (1.0, 2.0, 4.0, 6.0)
+            for attempt in range(1, len(retry_delays) + 2):
+                try:
+                    await bot.api.set_essence_msg(message_id = essence_msg_id)
+                    LOGGER.info("set essence msg: group_id=%s, msg_id=%s", group_id, essence_msg_id)
+                    return True
+                except Exception:
+                    if attempt > len(retry_delays):
+                        LOGGER.exception(
+                            "set essence msg failed after retries: group_id=%s, msg_id=%s",
+                            group_id,
+                            essence_msg_id,
+                        )
+                        return False
+                    delay = retry_delays[attempt - 1]
+                    LOGGER.warning(
+                        "set essence msg attempt %d failed, retry in %.1fs: group_id=%s msg_id=%s",
+                        attempt, delay, group_id, essence_msg_id,
+                    )
+                    await asyncio.sleep(delay)
+            return False
+
         for gid in groups:
             try:
                 raw_msg_id = await bot.api.post_group_msg(group_id = gid, text = text)
@@ -77,17 +111,14 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
                 )
                 continue
 
-            # NapCat 在极短时间窗口内可能还未完成消息索引，做短重试提升稳定性。
-            for attempt in range(1, 4):
-                try:
-                    await bot.api.set_essence_msg(message_id = msg_id)
-                    LOGGER.info("set essence msg: group_id=%s, msg_id=%s", gid, msg_id)
-                    break
-                except Exception:
-                    if attempt >= 3:
-                        LOGGER.exception("set essence msg failed: group_id=%s, msg_id=%s", gid, msg_id)
-                        break
-                    await asyncio.sleep(1)
+            essence_ok = await _set_essence_with_retry(gid, msg_id)
+
+            if not essence_ok:
+                LOGGER.warning(
+                    "set essence still failed after retries: group_id=%s msg_id=%s",
+                    gid,
+                    msg_id,
+                )
 
     async def _notify_admin_groups(text: str) -> None:
         await _notify_groups(ctx.settings.group_admin, text)

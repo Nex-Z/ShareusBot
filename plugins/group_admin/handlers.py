@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
+from typing import Any
 
 from ncatbot.core import BotClient
 from ncatbot.core.event import GroupMessageEvent, NoticeEvent
 
 from plugins.common import AppContext
+from plugins.query.parser import is_qiuwen
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,7 +51,66 @@ def _find_ban_word(text: str, words: list[str]) -> str | None:
     return None
 
 
+def _normalize_message_id(raw: Any) -> str | None:
+    if raw is None:
+        return None
+    if isinstance(raw, int):
+        return str(raw)
+    if isinstance(raw, str):
+        value = raw.strip()
+        if not value or value.lower() == "none":
+            return None
+        return value
+    if isinstance(raw, dict):
+        for key in ("message_id", "msg_id", "id"):
+            if key in raw:
+                return _normalize_message_id(raw.get(key))
+        nested = raw.get("data")
+        if nested is not None:
+            return _normalize_message_id(nested)
+        return None
+    data = getattr(raw, "data", None)
+    if data is not None:
+        return _normalize_message_id(data)
+    msg_id = getattr(raw, "message_id", None)
+    if msg_id is not None:
+        return _normalize_message_id(msg_id)
+    return None
+
+
 def register_group_admin_handlers(bot: BotClient, ctx: AppContext) -> None:
+    async def _post_msg_and_set_essence(group_id: str, text: str) -> None:
+        try:
+            raw_msg_id = await bot.api.post_group_msg(group_id=group_id, text=text)
+        except Exception:
+            LOGGER.exception("send reset pwd message failed: group_id=%s", group_id)
+            return
+
+        msg_id = _normalize_message_id(raw_msg_id)
+        if msg_id is None:
+            LOGGER.warning(
+                "set essence skipped in command: invalid message_id, group_id=%s raw=%r",
+                group_id,
+                raw_msg_id,
+            )
+            return
+
+        retry_delays = (0.6, 1.2, 2.0, 3.0, 5.0)
+        for attempt in range(1, len(retry_delays) + 2):
+            try:
+                await bot.api.set_essence_msg(message_id=msg_id)
+                LOGGER.info("set essence msg in command: group_id=%s msg_id=%s", group_id, msg_id)
+                return
+            except Exception:
+                if attempt > len(retry_delays):
+                    LOGGER.exception(
+                        "set essence msg failed in command after retries: group_id=%s msg_id=%s",
+                        group_id,
+                        msg_id,
+                    )
+                    return
+                await asyncio.sleep(retry_delays[attempt - 1])
+
     @bot.on_group_message()
     async def on_admin_command(event: GroupMessageEvent) -> None:
         if event.group_id not in (ctx.settings.group_admin + ctx.settings.group_test):
@@ -81,10 +143,7 @@ def register_group_admin_handlers(bot: BotClient, ctx: AppContext) -> None:
             msg = f"资源云盘密码已重置为：{password}"
             # 对齐 Java：核心通知资源群；命令触发时同步告知管理群。
             for gid in ctx.settings.group_res:
-                try:
-                    await bot.api.post_group_msg(group_id=gid, text=msg)
-                except Exception:
-                    LOGGER.exception("notify res group reset pwd failed: %s", gid)
+                await _post_msg_and_set_essence(gid, msg)
             for gid in ctx.settings.group_admin:
                 try:
                     await bot.api.post_group_msg(group_id=gid, text=msg)
@@ -124,6 +183,9 @@ def register_group_admin_handlers(bot: BotClient, ctx: AppContext) -> None:
             return
 
         text = _extract_text(event)
+        # 求文模板消息不参与违禁词拦截，避免书名等文本被单字黑名单误伤。
+        if is_qiuwen(text):
+            return
         hit = _find_ban_word(text, ctx.settings.ban_words)
         if not hit:
             return

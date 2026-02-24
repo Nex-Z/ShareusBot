@@ -51,6 +51,21 @@ class AlistService:
                 return str(token).strip()
         return ""
 
+    def _assert_success(self, payload: Any, operation: str) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"{operation} returned invalid payload type: {type(payload).__name__}")
+
+        code = payload.get("code")
+        if code is None:
+            # 兼容少量只返回 data 的接口
+            return payload
+
+        code_text = str(code).strip()
+        if code_text not in {"0", "200"}:
+            message = payload.get("message") or payload.get("msg") or "unknown error"
+            raise RuntimeError(f"{operation} failed: code={code_text}, message={message}")
+        return payload
+
     async def _login(self) -> str:
         url = self._build_url(self._settings.alist_login_endpoint)
         async with httpx.AsyncClient(timeout=12) as client:
@@ -62,7 +77,8 @@ class AlistService:
                 },
             )
             response.raise_for_status()
-            token = self._extract_token(response.json())
+            payload = self._assert_success(response.json(), "Alist login")
+            token = self._extract_token(payload)
             if not token:
                 raise RuntimeError("Alist login succeeded but token is empty.")
             return token
@@ -76,7 +92,7 @@ class AlistService:
                 headers={"authorization": token},
             )
             response.raise_for_status()
-            payload = response.json()
+            payload = self._assert_success(response.json(), "Alist meta get")
             data = payload.get("data")
             if isinstance(data, dict):
                 return data
@@ -91,6 +107,7 @@ class AlistService:
                 headers={"authorization": token},
             )
             response.raise_for_status()
+            self._assert_success(response.json(), "Alist meta update")
 
     def _default_refresh_path(self) -> str:
         prefix = self._settings.alist_r2_path_prefix.strip("/")
@@ -118,13 +135,7 @@ class AlistService:
                 headers={"authorization": token},
             )
             response.raise_for_status()
-            payload = response.json()
-            code = payload.get("code")
-            if code is not None:
-                code_text = str(code).strip()
-                if code_text not in {"0", "200"}:
-                    message = payload.get("message") or payload.get("msg") or "unknown error"
-                    raise RuntimeError(f"Alist fs list refresh failed: code={code_text}, message={message}")
+            self._assert_success(response.json(), "Alist fs list refresh")
         LOGGER.info("alist fs list refreshed: path=%s", refresh_path)
 
     async def reset_meta_password(self, password: str | None = None) -> str:

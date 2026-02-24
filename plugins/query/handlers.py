@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+import math
+import re
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from ncatbot.core import BotClient
 from ncatbot.core.event import GroupMessageEvent
@@ -19,6 +22,16 @@ def _extract_text(event: GroupMessageEvent) -> str:
     if text:
         return text
     return (event.raw_message or "").strip()
+
+
+def _minutes_until_next_midnight(tz_name: str) -> int:
+    try:
+        tz = ZoneInfo(tz_name)
+        now = datetime.now(tz)
+    except Exception:
+        now = datetime.now()
+    next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(1, math.ceil((next_midnight - now).total_seconds() / 60))
 
 
 def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
@@ -89,15 +102,32 @@ def register_query_handlers(bot: BotClient, ctx: AppContext) -> None:
 
         user_id = str(event.user_id)
         if not await _is_rate_limit_exempt(user_id) and await rate_limiter.exceeds_daily_limit(user_id):
+            mute_minutes = _minutes_until_next_midnight(ctx.settings.scheduler_timezone)
+            mute_seconds = mute_minutes * 60
             LOGGER.info(
-                "query daily limit exceeded: group_id=%s user_id=%s",
+                "query daily limit exceeded: group_id=%s user_id=%s mute_minutes=%s mute_seconds=%s",
                 event.group_id,
                 user_id,
+                mute_minutes,
+                mute_seconds,
             )
             try:
-                await event.ban(24 * 3600)
+                await event.ban(mute_seconds)
             except Exception:
                 LOGGER.debug("ban over-limit sender failed: user_id=%s", user_id)
+            notice = (
+                f"检测到求文超限并处理\n"
+                f"群：{event.group_id}\n"
+                f"用户：{user_id}\n"
+                f"今日上限：{ctx.settings.query_daily_limit}\n"
+                f"禁言时长：{mute_minutes}分钟（至次日00:00）\n"
+                f"内容：{re.sub(r'\\s+', ' ', text)[:200]}"
+            )
+            for admin_gid in ctx.settings.group_admin:
+                try:
+                    await bot.api.post_group_msg(group_id=admin_gid, text=notice)
+                except Exception:
+                    LOGGER.exception("notify admin over-limit event failed: %s", admin_gid)
             return
 
         keyword = f"{book_name} {author}".strip()
