@@ -16,4 +16,6 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 RUN uv sync --frozen --no-dev
 
-CMD ["uv", "run", "main.py"]
+RUN chmod +x /app/scripts/entrypoint.sh
+
+CMD ["/app/scripts/entrypoint.sh"]
