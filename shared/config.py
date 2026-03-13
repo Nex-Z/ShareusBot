@@ -251,7 +251,7 @@ def get_settings() -> Settings:
         scheduler_clear_invalid_enabled = _to_bool("SCHEDULER_CLEAR_INVALID", True),
         scheduler_clear_invalid_notice_enabled = _to_bool("SCHEDULER_CLEAR_INVALID_NOTICE", True),
         nonsense_send_hours = _to_int_list("NONSENSE_SEND_HOURS", [9, 11, 14, 18, 20, 23]),
-        nonsense_api_url = os.getenv("NONSENSE_API_URL", "https://api.uomg.com/api/rand.qinghua?format=text"),
+        nonsense_api_url = os.getenv("NONSENSE_API_URL", "https://api.qqsuu.cn/api/dm-saylove"),
         nonsense_max_request_times = int(os.getenv("NONSENSE_MAX_REQUEST_TIMES", "5")),
         qq_info_api_url = os.getenv("QQ_INFO_API_URL", "https://api.szfx.top/qq/info/?qq="),
         query_polling_timeout_days = int(os.getenv("QUERY_POLLING_TIMEOUT_DAYS", "7")),

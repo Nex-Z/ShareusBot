@@ -35,7 +35,21 @@ class NonsenseService:
         async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.get(self._api_url)
             resp.raise_for_status()
-            return resp.text.strip()
+            # New API returns JSON; keep compatibility with plain-text APIs.
+            try:
+                payload = resp.json()
+            except Exception:
+                return resp.text.strip()
+
+            if isinstance(payload, dict):
+                if payload.get("code") not in (None, 200, "200"):
+                    return ""
+                data = payload.get("data") or {}
+                if isinstance(data, dict):
+                    content = data.get("content", "")
+                    if isinstance(content, str):
+                        return content.strip()
+            return ""
 
     async def _record_send(self, content: str) -> None:
         if not content:
@@ -86,4 +100,3 @@ class NonsenseService:
 
         await self._record_send(content)
         return content
-
