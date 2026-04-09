@@ -13,6 +13,7 @@ from shared.services.meilisearch_service import MeiliSearchService
 from shared.services.nonsense_service import NonsenseService
 from shared.services.q_member_service import QMemberService
 from shared.services.qq_info_service import QQInfoService
+from shared.services.qq_monitor_service import QQMonitorService
 from shared.services.query_log_service import QueryLogService
 from shared.services.r2_service import R2Service
 from shared.services.short_url_service import ShortUrlService
@@ -30,6 +31,7 @@ class AppContext:
     _nonsense_service: NonsenseService | None = None
     _q_member_service: QMemberService | None = None
     _qq_info_service: QQInfoService | None = None
+    _qq_monitor_service: QQMonitorService | None = None
     _meilisearch_service: MeiliSearchService | None = None
     _r2_service: R2Service | None = None
     _short_url_service: ShortUrlService | None = None
@@ -68,6 +70,11 @@ class AppContext:
         if self._qq_info_service is None:
             self._qq_info_service = QQInfoService(self.settings)
         return self._qq_info_service
+
+    def qq_monitor_service(self) -> QQMonitorService:
+        if self._qq_monitor_service is None:
+            self._qq_monitor_service = QQMonitorService(self.settings)
+        return self._qq_monitor_service
 
     def file_processor_service(self) -> FileProcessorService:
         if self._file_processor_service is None:

@@ -143,6 +143,8 @@ class Settings:
     nonsense_api_url: str
     nonsense_max_request_times: int
     qq_info_api_url: str
+    qq_monitor_alarm_group_aliases: list[str]
+    qq_fault_alarm_state_path: str
     query_polling_timeout_days: int
     scheduler_report_output_dir: str
 
@@ -179,6 +181,17 @@ class Settings:
     def ban_word_groups(self) -> list[str]:
         mapped: list[str] = []
         for alias in self.ban_word_group_aliases:
+            mapped.extend(_group_alias(alias, self))
+        return _unique(mapped)
+
+    @property
+    def qq_monitor_probe_groups(self) -> list[str]:
+        return _unique(self.group_test + self.group_admin)
+
+    @property
+    def qq_monitor_alarm_groups(self) -> list[str]:
+        mapped: list[str] = []
+        for alias in self.qq_monitor_alarm_group_aliases:
             mapped.extend(_group_alias(alias, self))
         return _unique(mapped)
 
@@ -254,6 +267,8 @@ def get_settings() -> Settings:
         nonsense_api_url = os.getenv("NONSENSE_API_URL", "https://api.qqsuu.cn/api/dm-saylove"),
         nonsense_max_request_times = int(os.getenv("NONSENSE_MAX_REQUEST_TIMES", "5")),
         qq_info_api_url = os.getenv("QQ_INFO_API_URL", "https://api.szfx.top/qq/info/?qq="),
+        qq_monitor_alarm_group_aliases = _to_list("QQ_MONITOR_ALARM_GROUPS") or ["admin", "test"],
+        qq_fault_alarm_state_path = os.getenv("QQ_FAULT_ALARM_STATE_PATH", "./data/runtime/qq_fault_alarm.json"),
         query_polling_timeout_days = int(os.getenv("QUERY_POLLING_TIMEOUT_DAYS", "7")),
         scheduler_report_output_dir = os.getenv("SCHEDULER_REPORT_OUTPUT_DIR", "./data/reports"),
     )

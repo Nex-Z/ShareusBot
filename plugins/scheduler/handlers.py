@@ -55,8 +55,20 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         for gid in groups:
             try:
                 await bot.api.post_group_msg(group_id = gid, text = text)
-            except Exception:
+                if gid in ctx.settings.qq_monitor_alarm_groups:
+                    await ctx.qq_monitor_service().report_recovery(
+                        bot,
+                        scene = "scheduler_notify",
+                        probe_group = str(gid),
+                    )
+            except Exception as exc:
                 LOGGER.exception("send scheduler message failed: group_id=%s", gid)
+                await ctx.qq_monitor_service().report_send_exception(
+                    bot,
+                    scene = "scheduler_notify",
+                    target_group = str(gid),
+                    error = exc,
+                )
 
     async def _notify_groups_and_set_essence(groups: list[str], text: str) -> None:
         """发送消息到群并设置为群精华"""
@@ -98,8 +110,14 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
         for gid in groups:
             try:
                 raw_msg_id = await bot.api.post_group_msg(group_id = gid, text = text)
-            except Exception:
+            except Exception as exc:
                 LOGGER.exception("send scheduler message failed before set_essence: group_id=%s", gid)
+                await ctx.qq_monitor_service().report_send_exception(
+                    bot,
+                    scene = "scheduler_notify_set_essence",
+                    target_group = str(gid),
+                    error = exc,
+                )
                 continue
 
             msg_id = _normalize_message_id(raw_msg_id)
@@ -282,6 +300,10 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
     async def reset_password_job() -> None:
         if not ctx.alist_service().enabled:
             LOGGER.info("skip reset password job: alist not configured")
+            return
+        qq_service_ok = await ctx.qq_monitor_service().ensure_available_for_password_reset(bot)
+        if not qq_service_ok:
+            LOGGER.error("skip reset password job: qq service health check failed")
             return
         try:
             password = await ctx.alist_service().reset_meta_password()
