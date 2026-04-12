@@ -141,14 +141,9 @@ def register_group_admin_handlers(bot: BotClient, ctx: AppContext) -> None:
                 return
 
             msg = f"资源云盘密码已重置为：{password}"
-            # 对齐 Java：核心通知资源群；命令触发时同步告知管理群。
+            # 对齐 Java：核心通知资源群；命令触发时同步告知资源群。
             for gid in ctx.settings.group_res:
                 await _post_msg_and_set_essence(gid, msg)
-            for gid in ctx.settings.group_admin:
-                try:
-                    await bot.api.post_group_msg(group_id=gid, text=msg)
-                except Exception:
-                    LOGGER.exception("notify admin group reset pwd failed: %s", gid)
             return
 
     @bot.on_group_message()
