@@ -88,6 +88,28 @@ class AlistService:
             raise RuntimeError(f"{operation} returned invalid JSON.") from exc
         return self._assert_success(payload, operation)
 
+    def _response_error_message(self, response: httpx.Response) -> str:
+        try:
+            payload = response.json()
+        except ValueError:
+            return response.text[:300].strip() or response.reason_phrase
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                message = error.get("message") or error.get("code")
+                if message:
+                    return str(message)
+            message = payload.get("message") or payload.get("msg") or payload.get("error")
+            if message:
+                return str(message)
+        return response.reason_phrase
+
+    def _ensure_success(self, response: httpx.Response, operation: str) -> None:
+        if response.is_success:
+            return
+        message = self._response_error_message(response)
+        raise RuntimeError(f"{operation} failed: status={response.status_code}, message={message}")
+
     async def _login(self) -> str:
         url = self._build_url(self._settings.alist_login_endpoint)
         async with httpx.AsyncClient(timeout=12) as client:
@@ -108,21 +130,39 @@ class AlistService:
     def _directory_password_endpoint(self) -> str:
         endpoint = self._settings.alist_directory_password_endpoint.strip()
         if not endpoint:
-            endpoint = "/api/admin/directory-passwords/{id}/password"
+            endpoint = "/api/admin/directory-passwords/{id}"
         try:
             return endpoint.format(id=self._settings.alist_directory_password_id)
         except KeyError as exc:
             raise RuntimeError(f"Unsupported directory password endpoint placeholder: {exc}") from exc
 
+    def _fallback_directory_password_endpoint(self, endpoint: str) -> str:
+        value = endpoint.rstrip("/")
+        if not value.endswith("/password"):
+            return ""
+        return value.removesuffix("/password")
+
     async def _update_directory_password(self, token: str, password: str) -> None:
-        url = self._build_url(self._directory_password_endpoint())
+        endpoint = self._directory_password_endpoint()
+        url = self._build_url(endpoint)
         async with httpx.AsyncClient(timeout=12) as client:
             response = await client.patch(
                 url,
                 json={"password": password},
                 headers=self._auth_headers(token),
             )
-            response.raise_for_status()
+            fallback_endpoint = self._fallback_directory_password_endpoint(endpoint)
+            if response.status_code == 404 and fallback_endpoint:
+                LOGGER.warning(
+                    "PanShow password endpoint returned 404, retrying without /password: endpoint=%s",
+                    endpoint,
+                )
+                response = await client.patch(
+                    self._build_url(fallback_endpoint),
+                    json={"password": password},
+                    headers=self._auth_headers(token),
+                )
+            self._ensure_success(response, "PanShow directory password update")
             self._json_or_empty(response, "PanShow directory password update")
 
     async def reset_meta_password(self, password: str | None = None) -> str:

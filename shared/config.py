@@ -245,7 +245,7 @@ def get_settings() -> Settings:
         alist_login_endpoint = os.getenv("ALIST_LOGIN_ENDPOINT", "/api/auth/login"),
         alist_directory_password_endpoint = os.getenv(
             "ALIST_DIRECTORY_PASSWORD_ENDPOINT",
-            "/api/admin/directory-passwords/{id}/password",
+            "/api/admin/directory-passwords/{id}",
         ),
         alist_directory_password_id = int(os.getenv("ALIST_DIRECTORY_PASSWORD_ID", "1")),
         scheduler_enabled = _to_bool("SCHEDULER_ENABLED", True),
