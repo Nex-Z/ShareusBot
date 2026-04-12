@@ -117,13 +117,11 @@ class Settings:
 
     alist_base_url: str
     alist_r2_path_prefix: str
-    alist_fs_list_endpoint: str
     alist_username: str
     alist_password: str
     alist_login_endpoint: str
-    alist_meta_get_endpoint: str
-    alist_meta_update_endpoint: str
-    alist_meta_id: int
+    alist_directory_password_endpoint: str
+    alist_directory_password_id: int
 
     scheduler_enabled: bool
     scheduler_timezone: str
@@ -242,13 +240,14 @@ def get_settings() -> Settings:
         ban_word_mute_seconds = int(os.getenv("BAN_WORD_MUTE_SECONDS", "600")),
         alist_base_url = os.getenv("ALIST_BASE_URL", "").rstrip("/"),
         alist_r2_path_prefix = os.getenv("ALIST_R2_PATH_PREFIX", "r2"),
-        alist_fs_list_endpoint = os.getenv("ALIST_FS_LIST_ENDPOINT", "/api/fs/list"),
         alist_username = os.getenv("ALIST_USERNAME", ""),
         alist_password = os.getenv("ALIST_PASSWORD", ""),
         alist_login_endpoint = os.getenv("ALIST_LOGIN_ENDPOINT", "/api/auth/login"),
-        alist_meta_get_endpoint = os.getenv("ALIST_META_GET_ENDPOINT", "/api/admin/meta/get"),
-        alist_meta_update_endpoint = os.getenv("ALIST_META_UPDATE_ENDPOINT", "/api/admin/meta/update"),
-        alist_meta_id = int(os.getenv("ALIST_META_ID", "5")),
+        alist_directory_password_endpoint = os.getenv(
+            "ALIST_DIRECTORY_PASSWORD_ENDPOINT",
+            "/api/admin/directory-passwords/{id}/password",
+        ),
+        alist_directory_password_id = int(os.getenv("ALIST_DIRECTORY_PASSWORD_ID", "1")),
         scheduler_enabled = _to_bool("SCHEDULER_ENABLED", True),
         scheduler_timezone = os.getenv("SCHEDULER_TIMEZONE", "Asia/Shanghai"),
         scheduler_daily_report_enabled = _to_bool("SCHEDULER_DAILY_REPORT", True),

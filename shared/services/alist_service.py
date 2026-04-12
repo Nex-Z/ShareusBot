@@ -51,13 +51,26 @@ class AlistService:
                 return str(token).strip()
         return ""
 
+    def _auth_headers(self, token: str) -> dict[str, str]:
+        value = token.strip()
+        if not value.lower().startswith("bearer "):
+            value = f"Bearer {value}"
+        return {"Authorization": value}
+
     def _assert_success(self, payload: Any, operation: str) -> dict[str, Any]:
         if not isinstance(payload, dict):
             raise RuntimeError(f"{operation} returned invalid payload type: {type(payload).__name__}")
 
         code = payload.get("code")
         if code is None:
-            # 兼容少量只返回 data 的接口
+            error = payload.get("error")
+            if error:
+                message = payload.get("message") or payload.get("msg") or error
+                raise RuntimeError(f"{operation} failed: message={message}")
+            if payload.get("success") is False:
+                message = payload.get("message") or payload.get("msg") or "unknown error"
+                raise RuntimeError(f"{operation} failed: message={message}")
+            # 兼容只返回 token/data/ok 的接口
             return payload
 
         code_text = str(code).strip()
@@ -65,6 +78,15 @@ class AlistService:
             message = payload.get("message") or payload.get("msg") or "unknown error"
             raise RuntimeError(f"{operation} failed: code={code_text}, message={message}")
         return payload
+
+    def _json_or_empty(self, response: httpx.Response, operation: str) -> dict[str, Any]:
+        if not response.content:
+            return {}
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RuntimeError(f"{operation} returned invalid JSON.") from exc
+        return self._assert_success(payload, operation)
 
     async def _login(self) -> str:
         url = self._build_url(self._settings.alist_login_endpoint)
@@ -77,74 +99,37 @@ class AlistService:
                 },
             )
             response.raise_for_status()
-            payload = self._assert_success(response.json(), "Alist login")
+            payload = self._json_or_empty(response, "PanShow login")
             token = self._extract_token(payload)
             if not token:
-                raise RuntimeError("Alist login succeeded but token is empty.")
+                raise RuntimeError("PanShow login succeeded but token is empty.")
             return token
 
-    async def _get_meta(self, token: str) -> dict[str, Any]:
-        url = self._build_url(self._settings.alist_meta_get_endpoint)
+    def _directory_password_endpoint(self) -> str:
+        endpoint = self._settings.alist_directory_password_endpoint.strip()
+        if not endpoint:
+            endpoint = "/api/admin/directory-passwords/{id}/password"
+        try:
+            return endpoint.format(id=self._settings.alist_directory_password_id)
+        except KeyError as exc:
+            raise RuntimeError(f"Unsupported directory password endpoint placeholder: {exc}") from exc
+
+    async def _update_directory_password(self, token: str, password: str) -> None:
+        url = self._build_url(self._directory_password_endpoint())
         async with httpx.AsyncClient(timeout=12) as client:
-            response = await client.get(
+            response = await client.patch(
                 url,
-                params={"id": self._settings.alist_meta_id},
-                headers={"authorization": token},
+                json={"password": password},
+                headers=self._auth_headers(token),
             )
             response.raise_for_status()
-            payload = self._assert_success(response.json(), "Alist meta get")
-            data = payload.get("data")
-            if isinstance(data, dict):
-                return data
-            raise RuntimeError("Alist meta get returned invalid payload.")
-
-    async def _update_meta(self, token: str, data: dict[str, Any]) -> None:
-        url = self._build_url(self._settings.alist_meta_update_endpoint)
-        async with httpx.AsyncClient(timeout=12) as client:
-            response = await client.post(
-                url,
-                json=data,
-                headers={"authorization": token},
-            )
-            response.raise_for_status()
-            self._assert_success(response.json(), "Alist meta update")
-
-    def _default_refresh_path(self) -> str:
-        prefix = self._settings.alist_r2_path_prefix.strip("/")
-        if not prefix:
-            return "/"
-        return f"/{prefix}"
-
-    async def refresh_fs_list(self, path: str | None = None) -> None:
-        if not self.enabled:
-            raise RuntimeError("Alist is not configured.")
-
-        refresh_path = (path or "").strip() or self._default_refresh_path()
-        url = self._build_url(self._settings.alist_fs_list_endpoint)
-        token = await self._login()
-        async with httpx.AsyncClient(timeout=12) as client:
-            response = await client.post(
-                url,
-                json={
-                    "path": refresh_path,
-                    "password": "",
-                    "page": 1,
-                    "per_page": 10,
-                    "refresh": True,
-                },
-                headers={"authorization": token},
-            )
-            response.raise_for_status()
-            self._assert_success(response.json(), "Alist fs list refresh")
-        LOGGER.info("alist fs list refreshed: path=%s", refresh_path)
+            self._json_or_empty(response, "PanShow directory password update")
 
     async def reset_meta_password(self, password: str | None = None) -> str:
         if not self.enabled:
-            raise RuntimeError("Alist is not configured.")
+            raise RuntimeError("Cloud disk is not configured.")
 
         final_password = (password or "").strip() or self._generate_password(8)
         token = await self._login()
-        meta = await self._get_meta(token)
-        meta["password"] = final_password
-        await self._update_meta(token, meta)
+        await self._update_directory_password(token, final_password)
         return final_password

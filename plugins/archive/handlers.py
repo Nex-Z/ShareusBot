@@ -159,12 +159,6 @@ def register_archive_handlers(bot: BotClient, ctx: AppContext) -> None:
                     )
                 except Exception:
                     LOGGER.exception("close pending query log failed for archive_id=%s", saved.id)
-                if ctx.r2_service().enabled and ctx.alist_service().enabled:
-                    try:
-                        await ctx.alist_service().refresh_fs_list()
-                    except Exception:
-                        LOGGER.exception("alist fs list refresh failed for archive_id=%s", saved.id)
-
                 archived_names.append(source_name)
             except Exception:
                 LOGGER.exception("archive file failed: group_id=%s message_id=%s", event.group_id, event.message_id)

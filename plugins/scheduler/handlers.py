@@ -299,7 +299,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
 
     async def reset_password_job() -> None:
         if not ctx.alist_service().enabled:
-            LOGGER.info("skip reset password job: alist not configured")
+            LOGGER.info("skip reset password job: cloud disk not configured")
             return
         qq_service_ok = await ctx.qq_monitor_service().ensure_available_for_password_reset(bot)
         if not qq_service_ok:
@@ -309,7 +309,7 @@ def register_scheduler_handlers(bot: BotClient, ctx: AppContext) -> None:
             password = await ctx.alist_service().reset_meta_password()
         except Exception:
             LOGGER.exception("scheduled reset alist password failed")
-            await _notify_admin_groups("重置云盘密码失败，请检查 Alist 配置与网络。")
+            await _notify_admin_groups("重置云盘密码失败，请检查云盘配置与网络。")
             return
 
         msg = f"资源云盘密码已重置为：{password}"
